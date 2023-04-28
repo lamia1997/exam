@@ -48,6 +48,7 @@ deploy-dev:
       docker compose up -d &&
       docker images &&
       docker ps"
+      
 deploy-prod:
   rules:
     - if: $ENVIRONMENT == "prod"
