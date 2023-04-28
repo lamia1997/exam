@@ -35,8 +35,6 @@ build-n-push-images:
     - docker push $DOCKERHUB_USER/seed:v1
     
 deploy-dev:
-  rules:
-    - if: $ENVIRONMENT == "dev"
   stage: deploy_dev
   tags:
     - docker
