@@ -37,6 +37,7 @@ build-n-push-images:
 deploy-dev:
   rules:
     - if: $ENVIRONMENT == "dev"
+      variable: 
   stage: deploy_dev
   tags:
     - docker
@@ -44,7 +45,7 @@ deploy-dev:
     - chmod 400 $SSH_PRIVATE_KEY
     - scp -o StrictHostKeyChecking=no -i $SSH_PRIVATE_KEY docker-compose.yml ubuntu@13.39.109.252:/home/ubuntu/
   script:
-    - ssh -o StrictHostKeyChecking=no -i $SSH_PRIVATE_KEY ubuntu@13.39.109.252"
+    - ssh -o StrictHostKeyChecking=no -i $SSH_PRIVATE_KEY ubuntu@13.39.109.252 "
       ls &&
       docker compose down &&
       docker-compose up -d &&
@@ -60,7 +61,7 @@ deploy-prod:
     - chmod 400 $SSH_PRIVATE_KEY
     - scp -o StrictHostKeyChecking=no -i $SSH_PRIVATE_KEY docker-compose.yml ubuntu@35.180.131.96:/home/ubuntu/
   script:
-    - ssh -o StrictHostKeyChecking=no -i $SSH_PRIVATE_KEY unbuntu@35.180.131.96"
+    - ssh -o StrictHostKeyChecking=no -i $SSH_PRIVATE_KEY ubuntu@35.180.131.96"
       ls &&
       docker compose down &&
       docker-compose up -d &&
