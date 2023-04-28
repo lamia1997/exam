@@ -50,6 +50,22 @@ deploy-dev:
       docker compose up -d &&
       docker images &&
       docker ps"
+deploy-prod:
+  rules:
+    - if: $ENVIRONMENT == "prod"
+  stage: deploy_dev
+  tags:
+    - docker
+  before_script:
+    - chmod 400 $SSH_PRIVATE_KEY
+    - scp -o StrictHostKeyChecking=no -i $SSH_PRIVATE_KEY docker-compose.yml ubuntu@35.180.131.96:/home/ubuntu/
+  script:
+    - ssh -o StrictHostKeyChecking=no -i $SSH_PRIVATE_KEY ubuntu@35.180.131.96 "
+      ls &&
+      docker compose down &&
+      docker compose up -d &&
+      docker images &&
+      docker ps"
 
 
 
