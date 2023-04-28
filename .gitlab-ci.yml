@@ -53,7 +53,7 @@ deploy-dev:
 deploy-prod:
   rules:
     - if: $ENVIRONMENT == "prod"
-  stage: deploy_dev
+  stage: deploy_prod
   tags:
     - docker
   before_script:
