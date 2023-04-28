@@ -1,6 +1,6 @@
 services:
   vote:
-    build: ./vote
+    image: lamia2023/vote:v1
     # use python rather than gunicorn for local dev
     command: python app.py
     depends_on:
@@ -21,7 +21,7 @@ services:
       - back-tier
 
   result:
-    build: ./result
+    image: lamia2023/result:v1
     # use nodemon rather than node for local dev
     entrypoint: nodemon server.js
     depends_on:
@@ -37,8 +37,7 @@ services:
       - back-tier
 
   worker:
-    build:
-      context: ./worker
+    image: lamia2023/worker:v1
     depends_on:
       redis:
         condition: service_healthy
@@ -75,7 +74,7 @@ services:
   # it won't run unless you specify the "seed" profile
   # docker compose --profile seed up -d
   seed:
-    build: ./seed-data
+    image: lamia2023/seed:v1
     profiles: ["seed"]
     depends_on:
       vote:

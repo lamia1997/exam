@@ -1,0 +1,30 @@
+image: docker:latest
+variables:
+  DOCKER_TLS_CERTDIR: ""
+  DOCKER_HOST: "tcp://docker:2376"
+
+services:
+  - docker:dind 
+
+stages:
+  - build-n-push-images
+  - deploy_dev
+  - deploy_prod
+
+build-n-push-images:
+  rules:
+    - if: $ENVIRONMENT != "dev" || $ENVIRONMENT != "prod"
+  before_script:
+    - docker login -u $DOCKERHUB_USER -p $DOCKERHUB_PASSWORD
+  tags:
+    - docker
+  stage: build-n-push-images
+  script:
+    - docker-compose -f docker-compose-build.yaml build --parallel
+    - docker images
+    - docker push $DOCKERHUB_USER/vote:v1
+    - docker push $DOCKERHUB_USER/result:v1
+    - docker push $DOCKERHUB_USER/worker:v1
+    - docker push $DOCKERHUB_USER/seed:v1
+
+
