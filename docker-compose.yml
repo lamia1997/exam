@@ -4,8 +4,7 @@ services:
     # use python rather than gunicorn for local dev
     command: python app.py
     depends_on:
-      redis:
-        condition: service_healthy
+      - redis
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost"]
       interval: 15s
@@ -19,14 +18,14 @@ services:
     networks:
       - front-tier
       - back-tier
+    restart: always
 
   result:
     image: lamia2023/result:v1
     # use nodemon rather than node for local dev
     entrypoint: nodemon server.js
     depends_on:
-      db:
-        condition: service_healthy
+      - db
     volumes:
       - ./result:/app
     ports:
@@ -35,16 +34,16 @@ services:
     networks:
       - front-tier
       - back-tier
+    restart: always
 
   worker:
     image: lamia2023/worker:v1
     depends_on:
-      redis:
-        condition: service_healthy
-      db:
-        condition: service_healthy
+      - redis
+      - db
     networks:
       - back-tier
+    restart: always
 
   redis:
     image: redis:alpine
@@ -55,6 +54,7 @@ services:
       interval: "5s"
     networks:
       - back-tier
+    restart: always
 
   db:
     image: postgres:15-alpine
@@ -69,6 +69,7 @@ services:
       interval: "5s"
     networks:
       - back-tier
+    restart: always
 
   # this service runs once to seed the database with votes
   # it won't run unless you specify the "seed" profile
@@ -77,8 +78,7 @@ services:
     image: lamia2023/seed:v1
     profiles: ["seed"]
     depends_on:
-      vote:
-        condition: service_healthy
+      - vote
     networks:
       - front-tier
     restart: "no"
