@@ -42,7 +42,7 @@ deploy-dev:
     - docker
   before_script:
     - chmod 400 $SSH_PRIVATE_KEY
-    - scp -o StrictHostKeyChecking=no -i $SSH_PRIVATE_KEY docker-compose.yaml ubuntu@13.39.109.252:/home/ubuntu/
+    - scp -o StrictHostKeyChecking=no -i $SSH_PRIVATE_KEY docker-compose.yml ubuntu@13.39.109.252:/home/ubuntu/
   scripts:
     - ssh -o StrictHostKeyChecking=no -i $SSH_PRIVATE_KEY unbuntu@13.39.109.252"
         ls &&
