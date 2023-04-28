@@ -1,92 +1,204 @@
-# Examen_pipeline
+# Ynov Voting App
 
-
+A simple distributed application running across multiple Docker containers.
 
 ## Getting started
 
-To make it easy for you to get started with GitLab, here's a list of recommended next steps.
+This application uses Python, Node.js, .NET, with Redis for messaging and Postgres for storage.
 
-Already a pro? Just edit this README.md and make it your own. Want to make it easy? [Use the template at the bottom](#editing-this-readme)!
+The `vote` app will be running at [http://localhost:5005](http://localhost:5000), and the `results` will be at [http://localhost:5001](http://localhost:5001).
+Feel free to use differents ports
 
-## Add your files
+## Architecture
 
-- [ ] [Create](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#create-a-file) or [upload](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#upload-a-file) files
-- [ ] [Add files using the command line](https://docs.gitlab.com/ee/gitlab-basics/add-file.html#add-a-file-using-the-command-line) or push an existing Git repository with the following command:
+![Architecture diagram](architecture.excalidraw.png)
+
+- A front-end web app in [Python](/vote) which lets you vote between two options
+- A [Redis](https://hub.docker.com/_/redis/) which collects new votes
+- A [.NET](/worker/) worker which consumes votes and stores them in…
+- A [Postgres](https://hub.docker.com/_/postgres/) database backed by a Docker volume
+- A [Node.js](/result) web app which shows the results of the voting in real time
+
+## Notes
+
+The voting application only accepts one vote per client browser. It does not register additional votes if a vote has already been submitted from a client.
+
+# You will be evaluated based on below tasks
+
+Before starting working on the project make sure to fork it first.
+
+## TODO: Dockerfile
+
+Create a dockerfile for each project
+
+1. result
+
+```shell
+FROM node:18-slim
+
+# add curl for healthcheck
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+    curl \
+    tini \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# have nodemon available for local dev use (file watching)
+RUN npm install -g nodemon
+
+COPY package*.json ./
+
+RUN npm ci \
+ && npm cache clean --force \
+ && mv /app/node_modules /node_modules
+
+COPY . .
+
+ENV PORT 80
+EXPOSE 80
+
+ENTRYPOINT ["/usr/bin/tini", "--"]
+CMD ["node", "server.js"]
+```
+
+2. vote
+
+```shell
+# Using official python runtime base image
+FROM python:3.9-slim
+
+# add curl for healthcheck
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Set the application directory
+WORKDIR /app
+
+# Install our requirements.txt
+COPY requirements.txt /app/requirements.txt
+RUN pip install -r requirements.txt
+
+# Copy our code from the current folder to /app inside the container
+COPY . .
+
+# Make port 80 available for links and/or publish
+EXPOSE 80
+
+# Define our command to be run when launching the container
+CMD ["gunicorn", "app:app", "-b", "0.0.0.0:80", "--log-file", "-", "--access-logfile", "-", "--workers", "4", "--keep-alive", "0"]
 
 ```
-cd existing_repo
-git remote add origin http://ec2-13-37-42-66.eu-west-3.compute.amazonaws.com/gitlab-instance-acfe9b97/examen_pipeline.git
-git branch -M main
-git push -uf origin main
+
+2. worker
+
+```shell
+# because of dotnet, we always build on amd64, and target platforms in cli
+# dotnet doesn't support QEMU for building or running.
+# (errors common in arm/v7 32bit) https://github.com/dotnet/dotnet-docker/issues/1537
+# https://hub.docker.com/_/microsoft-dotnet
+# hadolint ignore=DL3029
+# to build for a different platform than your host, use --platform=<platform>
+# for example, if you were on Intel (amd64) and wanted to build for ARM, you would use:
+# docker buildx build --platform "linux/arm64/v8" .
+FROM --platform=${BUILDPLATFORM} mcr.microsoft.com/dotnet/sdk:7.0 as build
+ARG TARGETPLATFORM
+ARG BUILDPLATFORM
+RUN echo "I am running on $BUILDPLATFORM, building for $TARGETPLATFORM"
+
+WORKDIR /source
+COPY *.csproj .
+RUN case ${TARGETPLATFORM} in \
+         "linux/amd64")  ARCH=x64  ;; \
+         "linux/arm64")  ARCH=arm64  ;; \
+         "linux/arm64/v8")  ARCH=arm64  ;; \
+         "linux/arm/v7") ARCH=arm  ;; \
+    esac \
+    && dotnet restore -r linux-${ARCH}
+
+COPY . .
+RUN  case ${TARGETPLATFORM} in \
+         "linux/amd64")  ARCH=x64  ;; \
+         "linux/arm64")  ARCH=arm64  ;; \
+         "linux/arm64/v8")  ARCH=arm64  ;; \
+         "linux/arm/v7") ARCH=arm  ;; \
+    esac \
+    && dotnet publish -c release -o /app -r linux-${ARCH} --self-contained false --no-restore
+
+# app image
+FROM mcr.microsoft.com/dotnet/runtime:7.0
+WORKDIR /app
+COPY --from=build /app .
+ENTRYPOINT ["dotnet", "Worker.dll"]
 ```
 
-## Integrate with your tools
+4. seed-data
 
-- [ ] [Set up project integrations](http://ec2-13-37-42-66.eu-west-3.compute.amazonaws.com/gitlab-instance-acfe9b97/examen_pipeline/-/settings/integrations)
+```shell
+FROM python:3.9-slim
 
-## Collaborate with your team
+# add apache bench (ab) tool
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+    apache2-utils \
+    && rm -rf /var/lib/apt/lists/*
 
-- [ ] [Invite team members and collaborators](https://docs.gitlab.com/ee/user/project/members/)
-- [ ] [Create a new merge request](https://docs.gitlab.com/ee/user/project/merge_requests/creating_merge_requests.html)
-- [ ] [Automatically close issues from merge requests](https://docs.gitlab.com/ee/user/project/issues/managing_issues.html#closing-issues-automatically)
-- [ ] [Enable merge request approvals](https://docs.gitlab.com/ee/user/project/merge_requests/approvals/)
-- [ ] [Automatically merge when pipeline succeeds](https://docs.gitlab.com/ee/user/project/merge_requests/merge_when_pipeline_succeeds.html)
+WORKDIR /seed
 
-## Test and Deploy
+COPY . .
 
-Use the built-in continuous integration in GitLab.
+# create POST data files with ab friendly formats
+RUN python make-data.py
 
-- [ ] [Get started with GitLab CI/CD](https://docs.gitlab.com/ee/ci/quick_start/index.html)
-- [ ] [Analyze your code for known vulnerabilities with Static Application Security Testing(SAST)](https://docs.gitlab.com/ee/user/application_security/sast/)
-- [ ] [Deploy to Kubernetes, Amazon EC2, or Amazon ECS using Auto Deploy](https://docs.gitlab.com/ee/topics/autodevops/requirements.html)
-- [ ] [Use pull-based deployments for improved Kubernetes management](https://docs.gitlab.com/ee/user/clusters/agent/)
-- [ ] [Set up protected environments](https://docs.gitlab.com/ee/ci/environments/protected_environments.html)
+CMD /seed/generate-votes.sh
+```
 
-***
+## TODO: Build images
 
-# Editing this README
+- Create a `docker-compose-build.yaml` file that will build all images
+- Run `docker-compose -f docker-compose-build.yaml build --parallel` to create images
+- Publish the images to dockerhub
+- Put a screenshot of your dockerhub images inside `screenshots` folder
 
-When you're ready to make this README your own, just edit this file and use the handy template below (or feel free to structure it however you want - this is just a starting point!). Thank you to [makeareadme.com](https://www.makeareadme.com/) for this template.
+## TODO: Create a containers
 
-## Suggestions for a good README
-Every project is different, so consider which of these sections apply to yours. The sections used in the template are suggestions for most open source projects. Also keep in mind that while a README can be too long and detailed, too long is better than too short. If you think your README is too long, consider utilizing another form of documentation rather than cutting out information.
+- A sample `docker-compose.yaml` file is available in the root folder. Use it to create all the containers in one go.
+- Put a screenshot of running containers inside `screenshots` folder
 
-## Name
-Choose a self-explaining name for your project.
+## TODO: Virtual machines and project setup
 
-## Description
-Let people know what your project can do specifically. Provide context and add a link to any reference visitors might be unfamiliar with. A list of Features or a Background subsection can also be added here. If there are alternatives to your project, this is a good place to list differentiating factors.
+1. Create 5 virtual machines
 
-## Badges
-On some READMEs, you may see small images that convey metadata, such as whether or not all the tests are passing for the project. You can use Shields to add some to your README. Many services also have instructions for adding a badge.
+   - `gitlab-instance` will host a running instance of gitlab application
+   - `gitlab-runner-shell` will host a shell based runner
+   - `gitlab-runner-docker` will host a docker executor based runner
+   - `dev-server` will deploy the ynov-voting application
+   - `prod-server` will deploy the ynov-voting application
 
-## Visuals
-Depending on what you are making, it can be a good idea to include screenshots or even a video (you'll frequently see GIFs rather than actual videos). Tools like ttygif can help, but check out Asciinema for a more sophisticated method.
+Note: The images tags deployed on `dev-server` and `prod-server` need to be differents.
 
-## Installation
-Within a particular ecosystem, there may be a common way of installing things, such as using Yarn, NuGet, or Homebrew. However, consider the possibility that whoever is reading your README is a novice and would like more guidance. Listing specific steps helps remove ambiguity and gets people to using your project as quickly as possible. If it only runs in a specific context like a particular programming language version or operating system or has dependencies that have to be installed manually, also add a Requirements subsection.
+2. Put a screenshot of the virtual machines inside `screenshots` folder
+3. Create a project inside gitlab
+4. Apart from the creator of gitlab repo, create 2 other users as part of your team and add them with Developer role to the repository
+5. Fork the github voting project and push to the gitlab repository. Make sure to set the appropriate repository url
+6. Take all necessary screenshots that demonstrate all the tasks and put them inside the `screenshots` folder
 
-## Usage
-Use examples liberally, and show the expected output if you can. It's helpful to have inline the smallest example of usage that you can demonstrate, while providing links to more sophisticated examples if they are too long to reasonably include in the README.
+## TODO: CICD Pipeline
 
-## Support
-Tell people where they can go to for help. It can be any combination of an issue tracker, a chat room, an email address, etc.
+1. Create a file named `.gitlab-ci.yml` inside the root project folder that will contains the CICD pipeline
+2. The pipeline should conntains 3 stages
+   - `build-n-push-images` This stage will build images and push them to dockerhub
+   - `deploy-dev` This stage will run a job that will deploy images to the `dev-server`
+   - `deploy-prod` This stage will run a job that will deploy images to the `prod-server`
+3. From the deployment servers, and using any container, run `docker inspect <container-name> | grep image`. This command will show the deployed image. The goal of this task is to make sure the two servers have differents images tag deployed.
+4. The 2 other members need to create feature branch and suggest a small changes to the project. It can be a simple README.md update. The need to create a merge request so that the owner of the repo can merge to master branch
+5. Put the necessary screenshots that demonstrate your work
+6. Make sure to reset your local project url to a github repo and push all changes on the github repo as this is the one your are going to submit
 
-## Roadmap
-If you have ideas for releases in the future, it is a good idea to list them in the README.
+## RUNNING APPLICATION
 
-## Contributing
-State if you are open to contributions and what your requirements are for accepting them.
-
-For people who want to make changes to your project, it's helpful to have some documentation on how to get started. Perhaps there is a script that they should run or some environment variables that they need to set. Make these steps explicit. These instructions could also be useful to your future self.
-
-You can also document commands to lint the code or run tests. These steps help to ensure high code quality and reduce the likelihood that the changes inadvertently break something. Having instructions for running tests is especially helpful if it requires external setup, such as starting a Selenium server for testing in a browser.
-
-## Authors and acknowledgment
-Show your appreciation to those who have contributed to the project.
-
-## License
-For open source projects, say how it is licensed.
-
-## Project status
-If you have run out of energy or time for your project, put a note at the top of the README saying that development has slowed down or stopped completely. Someone may choose to fork your project or volunteer to step in as a maintainer or owner, allowing your project to keep going. You can also make an explicit request for maintainers.
+As final task, access the application using the deployment server public ip and take a screenshot of the voting application. Feel free to play with the application by doing some vote for cats or dogs :)
+PLEASE DO NOT FORGET TO ENTER YOUR GITHUB URL AND YOUR TEAM MEMBERS NAMES when submitting your work
