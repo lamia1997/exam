@@ -3,16 +3,16 @@ services:
   vote:
     build:
       context: ./vote
-    image: lamia2023/vote:v2
+    image: lamia2023/vote:v1
   result:
     build:
       context: ./result
-    image: lamia2023/result:v2
+    image: lamia2023/result:v1
   worker:
     build:
       context: ./worker
-    image: lamia2023/worker:v2
+    image: lamia2023/worker:v1
   seed:
     build:
       context: ./seed-data
-    image: lamia2023/seed:v2
+    image: lamia2023/seed:v1
